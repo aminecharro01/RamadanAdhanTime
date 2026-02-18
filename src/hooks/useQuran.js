@@ -11,7 +11,7 @@ export const useQuran = () => {
         const fetchSurahs = async () => {
             setLoading(true);
             try {
-                const response = await axios.get('http://api.alquran.cloud/v1/surah');
+                const response = await axios.get('https://api.alquran.cloud/v1/surah');
                 setSurahs(response.data.data);
                 setLoading(false);
             } catch (err) {
@@ -29,7 +29,7 @@ export const useQuran = () => {
         setLoading(true);
         try {
             // Fetch Arabic (Uthmani) only
-            const response = await axios.get(`http://api.alquran.cloud/v1/surah/${id}/editions/quran-uthmani`);
+            const response = await axios.get(`https://api.alquran.cloud/v1/surah/${id}/editions/quran-uthmani`);
             setLoading(false);
             return {
                 arabic: response.data.data[0]
