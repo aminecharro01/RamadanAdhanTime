@@ -22,6 +22,7 @@ export const usePrayerTimes = (coordinates) => {
                         latitude: coordinates.lat,
                         longitude: coordinates.lng,
                         method: 21, // Morocco (Ministry of Habous and Islamic Affairs)
+                        adjustment: -1, // Adjust Hijri date by -1 day
                     },
                     signal: controller.signal
                 });

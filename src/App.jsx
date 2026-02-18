@@ -8,11 +8,14 @@ import LocationHeader from './components/LocationHeader';
 import PrayerCard from './components/PrayerCard';
 import CountdownTimer from './components/CountdownTimer';
 import WeatherCard from './components/WeatherCard';
-import CalendarView from './components/CalendarView'; // [NEW]
+import CalendarView from './components/CalendarView';
+import QuranView from './components/QuranView';
+import Footer from './components/Footer';
+import DailyDua from './components/DailyDua';
 import Loader from './components/Loader';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cities } from './data/cities';
-import { MapPin, CalendarDays } from 'lucide-react'; // Added CalendarDays icon
+import { MapPin, CalendarDays, BookOpen } from 'lucide-react'; // Added BookOpen icon
 import bgImage from './assets/nouman-younas-TM4522xcNRs-unsplash.jpg';
 
 function App() {
@@ -20,7 +23,8 @@ function App() {
   const { toggleLanguage, t, isRTL, language } = useLanguage();
 
   const [selectedCity, setSelectedCity] = useState(cities[0]);
-  const [showCalendar, setShowCalendar] = useState(false); // [NEW]
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showQuran, setShowQuran] = useState(false); // [NEW]
 
   // Determine which coordinates to use
   const coordinates = selectedCity.lat
@@ -118,11 +122,20 @@ function App() {
 
         <div className="pointer-events-auto flex items-center gap-2">
           <button
+            onClick={() => setShowQuran(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all duration-300 text-white"
+            title={t.quran}
+          >
+            <BookOpen size={20} />
+            <span className="font-medium hidden sm:inline">{t.quran}</span>
+          </button>
+          <button
             onClick={() => setShowCalendar(true)}
-            className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all duration-300 text-white"
+            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all duration-300 text-white"
             title={t.calendar}
           >
             <CalendarDays size={20} />
+            <span className="font-medium hidden sm:inline">{t.calendar}</span>
           </button>
           <button
             onClick={toggleLanguage}
@@ -132,6 +145,16 @@ function App() {
           </button>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showQuran && (
+          <QuranView
+            onClose={() => setShowQuran(false)}
+            t={t}
+            language={language}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showCalendar && (
@@ -204,6 +227,9 @@ function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <DailyDua language={language} t={t} />
+      <Footer t={t} />
     </div>
   );
 }

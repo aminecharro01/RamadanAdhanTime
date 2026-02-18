@@ -19,7 +19,13 @@ export const translations = {
         calendar: "Calendar",
         close: "Close",
         gregorian: "Gregorian",
-        hijri: "Hijri"
+        hijri: "Hijri",
+        quran: "Quran",
+        surah: "Surah",
+        read: "Read",
+        searchSurah: "Search Surah...",
+        verses: "Verses",
+        developedBy: "Developed by"
     },
     ar: {
         appTitle: "وقت الأذان",
@@ -41,6 +47,12 @@ export const translations = {
         calendar: "التقويم",
         close: "إغلاق",
         gregorian: "ميلادي",
-        hijri: "هجري"
+        hijri: "هجري",
+        quran: "القرآن الكريم",
+        surah: "سورة",
+        read: "قراءة",
+        searchSurah: "بحث عن سورة...",
+        verses: "آيات",
+        developedBy: "تطوير"
     }
 };
