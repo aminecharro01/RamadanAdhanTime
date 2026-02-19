@@ -12,8 +12,8 @@ export default defineConfig({
       manifest: {
         name: 'AdhanTime',
         short_name: 'AdhanTime',
-        description: 'Islamic Prayer Times & Weather',
-        theme_color: '#ffffff',
+        description: 'Modern Islamic Utility App for Prayer Times and Quran',
+        theme_color: '#10b981',
         icons: [
           {
             src: 'pwa-192x192.png',
@@ -24,6 +24,12 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
           }
         ]
       }

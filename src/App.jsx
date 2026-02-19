@@ -12,11 +12,12 @@ import CalendarView from './components/CalendarView';
 import QuranView from './components/QuranView';
 import Footer from './components/Footer';
 import DailyDua from './components/DailyDua';
+import KhatmTracker from './components/KhatmTracker'; // [NEW]
 import Loader from './components/Loader';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cities } from './data/cities';
-import { MapPin, CalendarDays, BookOpen } from 'lucide-react'; // Added BookOpen icon
-import bgImage from './assets/nouman-younas-TM4522xcNRs-unsplash.jpg';
+import { MapPin, CalendarDays, BookOpen } from 'lucide-react';
+import { getGradientClass } from './utils/gradientUtils'; // [NEW]
 
 function App() {
   const geo = useGeolocation();
@@ -75,18 +76,23 @@ function App() {
     ? (language === 'ar' && selectedCity.nameAr ? selectedCity.nameAr : selectedCity.name)
     : (weather?.city || t.locating);
 
+  const [bgGradient, setBgGradient] = useState(getGradientClass());
+
+  useEffect(() => {
+    // Update gradient every minute
+    const interval = setInterval(() => {
+      setBgGradient(getGradientClass());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div
       dir={isRTL ? 'rtl' : 'ltr'}
-      className="min-h-screen w-full flex flex-col items-center p-6 sm:p-12 font-sans relative overflow-hidden text-slate-900 dark:text-white"
-      style={{
-        backgroundImage: `url(${bgImage})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
+      className={`min-h-screen w-full flex flex-col items-center p-6 sm:p-12 font-sans relative overflow-hidden text-slate-900 dark:text-white transition-colors duration-1000 ${bgGradient}`}
     >
-      {/* Dark Overlay for readability */}
-      <div className="absolute inset-0 bg-black/40 pointer-events-none z-0"></div>
+      {/* Dark Overlay for readability (optional, adjusted opacity) */}
+      <div className="absolute inset-0 bg-black/10 pointer-events-none z-0"></div>
 
       {/* Ambient Animated Background Elements (Optional - keeping subtle) */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
@@ -224,6 +230,9 @@ function App() {
             </div>
 
             {!weatherLoading && weather && <WeatherCard weather={{ ...weather, city: displayCity }} bgLabel={t.currentWeather} />}
+
+            <KhatmTracker t={t} language={language} />
+
           </motion.div>
         )}
       </AnimatePresence>
