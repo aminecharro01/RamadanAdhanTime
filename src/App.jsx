@@ -206,6 +206,8 @@ function App() {
               appTitle={t.appTitle}
             />
 
+            <DailyDua language={language} t={t} />
+
             {nextPrayer && (
               <CountdownTimer
                 nextPrayer={nextPrayer}
@@ -237,7 +239,6 @@ function App() {
         )}
       </AnimatePresence>
 
-      <DailyDua language={language} t={t} />
       <Footer t={t} />
     </div>
   );

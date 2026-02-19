@@ -19,36 +19,32 @@ const DailyDua = ({ language, t }) => {
     return (
         <AnimatePresence>
             <motion.div
-                initial={{ opacity: 0, x: -50 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -50 }}
-                transition={{ duration: 0.8, delay: 0.5 }}
-                className="fixed left-6 top-1/2 -translate-y-1/2 z-20 hidden xl:block w-80"
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, height: 0 }}
+                className="w-full max-w-sm mx-auto mt-6 mb-2"
             >
-                <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 shadow-xl relative group">
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 relative group hover:bg-white/10 transition-colors">
+                    {/* Optional Close Button - kept for user control */}
                     <button
                         onClick={() => setIsVisible(false)}
-                        className="absolute top-2 right-2 p-1 text-white/50 hover:text-white rounded-full hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100"
+                        className="absolute top-2 right-2 p-1 text-white/30 hover:text-white rounded-full hover:bg-white/10 transition-colors"
                     >
-                        <X size={16} />
+                        <X size={14} />
                     </button>
 
-                    <div className="flex justify-center mb-4 text-emerald-400">
-                        <Quote size={24} className="fill-current" />
-                    </div>
+                    <div className="flex flex-col items-center text-center space-y-2">
+                        <Quote size={16} className="text-emerald-400 fill-current mb-1" />
 
-                    <div className="text-center space-y-4">
-                        <p className="text-xl leading-loose font-serif text-white/95" style={{ fontFamily: 'Amiri, serif' }}>
+                        <p className="text-lg leading-relaxed font-serif text-white/90" style={{ fontFamily: 'Amiri, serif' }}>
                             {dailyDua.arabic}
                         </p>
 
-                        <div className="w-12 h-px bg-white/20 mx-auto"></div>
-
-                        <p className="text-sm text-white/80 font-light italic">
+                        <p className="text-xs text-white/60 italic font-light px-4">
                             "{dailyDua.english}"
                         </p>
 
-                        <p className="text-xs text-white/50 uppercase tracking-widest mt-2">
+                        <p className="text-[10px] text-white/40 uppercase tracking-widest">
                             {dailyDua.source}
                         </p>
                     </div>
