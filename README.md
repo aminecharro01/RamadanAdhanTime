@@ -49,6 +49,3 @@ AdhanTime is a modern, responsive web application that displays Islamic prayer t
 - [Aladhan API](https://aladhan.com/prayer-times-api) for Prayer Times.
 - [OpenWeatherMap](https://openweathermap.org/) (Primary) or [Open-Meteo](https://open-meteo.com/) (Fallback) for Weather.
 
-## License
-
-MIT
