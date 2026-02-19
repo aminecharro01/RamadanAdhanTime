@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuran } from '../hooks/useQuran';
 import { useKhatmah } from '../hooks/useKhatmah'; // [NEW]
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, ChevronLeft, BookOpen, Save, Bookmark } from 'lucide-react';
+import { X, Search, ChevronLeft, ChevronRight, BookOpen, Save, Bookmark } from 'lucide-react';
 import Loader from './Loader';
 
 const QuranView = ({ onClose, t, language }) => {
@@ -111,7 +111,35 @@ const QuranView = ({ onClose, t, language }) => {
                             className="h-full flex flex-col p-4 md:p-8"
                         >
                             {/* Search Bar */}
-                            <div className="mb-8 max-w-2xl mx-auto w-full">
+                            <div className="mb-8 max-w-2xl mx-auto w-full space-y-4">
+                                {/* Resume Button */}
+                                {progress.sura > 0 && (
+                                    <motion.button
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded-2xl p-4 flex items-center justify-between group transition-all"
+                                        onClick={() => {
+                                            const savedSurah = surahs.find(s => s.number === progress.sura);
+                                            if (savedSurah) handleSurahClick(savedSurah);
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-full bg-emerald-500 text-black flex items-center justify-center">
+                                                <Bookmark size={20} fill="currentColor" />
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="text-emerald-400 font-bold text-sm uppercase tracking-wide">
+                                                    {language === 'ar' ? 'تابع القراءة' : 'Continue Reading'}
+                                                </div>
+                                                <div className="text-white text-lg font-serif">
+                                                    {language === 'ar' ? `سورة ${progress.sura} : آية ${progress.ayah}` : `Surah ${progress.sura} : Ayah ${progress.ayah}`}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <ChevronRight size={24} className={`text-emerald-400 group-hover:translate-x-1 transition-transform ${language === 'ar' ? 'rotate-180 group-hover:-translate-x-1' : ''}`} />
+                                    </motion.button>
+                                )}
+
                                 <div className="relative">
                                     <Search className={`absolute top-4 ${language === 'ar' ? 'right-5' : 'left-5'} text-white/50`} size={24} />
                                     <input
