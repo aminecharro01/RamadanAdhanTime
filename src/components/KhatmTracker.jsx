@@ -1,31 +1,26 @@
-import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BookOpen, CheckCircle } from 'lucide-react';
-import { useQuran } from '../hooks/useQuran';
+import { BookOpen, Calendar, ChevronRight } from 'lucide-react';
+import { useKhatmah } from '../hooks/useKhatmah';
+import { getProgressPercentage } from '../utils/quranUtils';
+
+// Helper to calculate estimated completion
+const getEstimatedCompletion = (percentage) => {
+    if (percentage === 0) return "Start reading to see estimate";
+    if (percentage >= 100) return "Alhamdulillah! Completed";
+
+    // Simple projection: Assume 1 month for completion if just started, or project based on rate
+    // For now, let's keep it motivating but static until we track daily velocity
+    const daysLeft = Math.round((100 - percentage) * 0.3); // Rough mapping (30 days total)
+    return `${daysLeft} days to finish`;
+};
 
 const KhatmTracker = ({ t, language }) => {
-    // Total number of Surahs in Quran is 114
-    const totalSurahs = 114;
+    const { progress, percentage } = useKhatmah();
 
-    // State for Last Read Surah (stored in localStorage)
-    // We store the index (0-113) or number (1-114)
-    const [lastReadSurah, setLastReadSurah] = useState(() => {
-        const saved = localStorage.getItem('adhanTime_n2_lastRead');
-        return saved ? parseInt(saved, 10) : 0;
-    });
-
-    const [percentage, setPercentage] = useState(0);
-
-    useEffect(() => {
-        const percent = Math.round((lastReadSurah / totalSurahs) * 100);
-        setPercentage(percent);
-    }, [lastReadSurah]);
-
-    const handleUpdateProgress = (e) => {
-        const newValue = parseInt(e.target.value, 10);
-        setLastReadSurah(newValue);
-        localStorage.setItem('adhanTime_n2_lastRead', newValue);
-    };
+    // Circular Progress Props
+    const radius = 50;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
     return (
         <motion.div
@@ -34,50 +29,64 @@ const KhatmTracker = ({ t, language }) => {
             transition={{ delay: 0.3 }}
             className="w-full max-w-sm mt-8 mx-auto"
         >
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-6 shadow-xl relative overflow-hidden group hover:bg-white/15 transition-all">
                 {/* Glow Effect */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+                <div className="absolute top-0 right-0 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
 
-                <div className="flex justify-between items-center mb-4 relative z-10">
-                    <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                        <BookOpen size={20} className="text-emerald-400" />
-                        {language === 'ar' ? 'ختم القرآن' : 'Khatm Progress'}
-                    </h3>
-                    <span className="text-emerald-300 font-mono font-bold text-xl">{percentage}%</span>
-                </div>
-
-                {/* Progress Bar Container */}
-                <div className="h-4 bg-black/20 rounded-full overflow-hidden mb-6 relative border border-white/5">
-                    <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${percentage}%` }}
-                        transition={{ duration: 1.5, ease: "easeOut" }}
-                        className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full relative"
-                    >
-                        {/* Shimmer Effect */}
-                        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 animate-shimmer"></div>
-                    </motion.div>
-                </div>
-
-                {/* Input Slider */}
-                <div className="space-y-2 relative z-10">
-                    <div className="flex justify-between text-xs text-white/50">
-                        <span>{language === 'ar' ? 'سورة الفاتحة' : 'Al-Fatiha'}</span>
-                        <span>{language === 'ar' ? 'سورة الناس' : 'An-Nas'}</span>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-white font-bold text-lg flex items-center gap-2 mb-1">
+                            <BookOpen size={20} className="text-emerald-400" />
+                            {language === 'ar' ? 'ختم القرآن' : 'Khatmah Progress'}
+                        </h3>
+                        <p className="text-white/60 text-xs flex items-center gap-1">
+                            <Calendar size={12} />
+                            {getEstimatedCompletion(percentage)}
+                        </p>
                     </div>
-                    <input
-                        type="range"
-                        min="0"
-                        max="114"
-                        value={lastReadSurah}
-                        onChange={handleUpdateProgress}
-                        className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-emerald-400 hover:accent-emerald-300 transition-all"
-                    />
-                    <p className="text-center text-white/80 text-sm mt-2 font-medium">
-                        {language === 'ar'
-                            ? `وصلت إلى السورة رقم ${lastReadSurah}`
-                            : `Last read: Surah #${lastReadSurah}`}
-                    </p>
+
+                    {/* Radial Progress */}
+                    <div className="relative w-16 h-16 flex items-center justify-center">
+                        <svg className="transform -rotate-90 w-16 h-16">
+                            <circle
+                                cx="32"
+                                cy="32"
+                                r="28"
+                                stroke="currentColor"
+                                strokeWidth="6"
+                                fill="transparent"
+                                className="text-white/10"
+                            />
+                            <circle
+                                cx="32"
+                                cy="32"
+                                r="28"
+                                stroke="currentColor"
+                                strokeWidth="6"
+                                fill="transparent"
+                                strokeDasharray={2 * Math.PI * 28}
+                                strokeDashoffset={2 * Math.PI * 28 - (percentage / 100) * 2 * Math.PI * 28}
+                                className="text-emerald-400 transition-all duration-1000 ease-out"
+                                strokeLinecap="round"
+                            />
+                        </svg>
+                        <span className="absolute text-xs font-bold text-white">{Math.round(percentage)}%</span>
+                    </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-between bg-black/20 rounded-xl p-3 border border-white/5">
+                    <div className="flex flex-col">
+                        <span className="text-white/40 text-xs uppercase tracking-wider">
+                            {language === 'ar' ? 'آخر قراءة' : 'Last Read'}
+                        </span>
+                        <span className="text-white font-medium text-sm mt-1">
+                            {language === 'ar' ? `سورة ${progress.sura} : آية ${progress.ayah}` : `Surah ${progress.sura} : Ayah ${progress.ayah}`}
+                        </span>
+                    </div>
+
+                    <button className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/70 hover:bg-emerald-500 hover:text-white transition-all">
+                        <ChevronRight size={16} className={language === 'ar' ? 'rotate-180' : ''} />
+                    </button>
                 </div>
             </div>
         </motion.div>

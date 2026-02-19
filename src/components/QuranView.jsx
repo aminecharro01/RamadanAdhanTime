@@ -1,22 +1,39 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuran } from '../hooks/useQuran';
+import { useKhatmah } from '../hooks/useKhatmah'; // [NEW]
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, ChevronLeft, BookOpen } from 'lucide-react';
+import { X, Search, ChevronLeft, BookOpen, Save, Bookmark } from 'lucide-react';
 import Loader from './Loader';
 
 const QuranView = ({ onClose, t, language }) => {
     const { surahs, getSurah, loading: hookLoading, error } = useQuran();
+    const { progress, saveProgress } = useKhatmah(); // [NEW]
     const [selectedSurah, setSelectedSurah] = useState(null);
     const [surahContent, setSurahContent] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [contentLoading, setContentLoading] = useState(false);
-    const [fontSize, setFontSize] = useState(36); // Default font size
+    const [fontSize, setFontSize] = useState(36);
+    const [savedPopup, setSavedPopup] = useState(false); // [NEW] Feedback state
 
-    // Zoom controls
+    const verseRefs = useRef({}); // [NEW] Refs for scrolling
+
+    // Auto-scroll to saved verse when content loads
+    useEffect(() => {
+        if (surahContent && selectedSurah && progress.sura === selectedSurah.number) {
+            const savedAyah = progress.ayah;
+            const element = verseRefs.current[savedAyah];
+            if (element) {
+                setTimeout(() => {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 500); // Small delay to ensure rendering
+            }
+        }
+    }, [surahContent, selectedSurah, progress]);
+
     const handleZoomIn = () => setFontSize(prev => Math.min(prev + 4, 80));
     const handleZoomOut = () => setFontSize(prev => Math.max(prev - 4, 20));
 
-    // Filter surahs based on search (still use English/Arabic names for search flexibility)
+    // Filter surahs
     const filteredSurahs = surahs.filter(s =>
         s.englishName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         s.name.includes(searchTerm) ||
@@ -34,6 +51,12 @@ const QuranView = ({ onClose, t, language }) => {
     const handleBack = () => {
         setSelectedSurah(null);
         setSurahContent(null);
+    };
+
+    const handleSaveProgress = (ayahNumber) => {
+        saveProgress(selectedSurah.number, ayahNumber);
+        setSavedPopup(ayahNumber);
+        setTimeout(() => setSavedPopup(false), 2000);
     };
 
     return (
@@ -142,6 +165,21 @@ const QuranView = ({ onClose, t, language }) => {
                             exit={{ opacity: 0, scale: 0.98 }}
                             className="h-full overflow-y-auto custom-scrollbar p-4 md:p-12 pb-32"
                         >
+                            {/* Toast Notification */}
+                            <AnimatePresence>
+                                {savedPopup && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 50 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 50 }}
+                                        className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 z-50 pointer-events-none"
+                                    >
+                                        <Save size={18} />
+                                        <span className="font-bold">Saved Ayah {savedPopup}</span>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
                             {contentLoading ? (
                                 <div className="h-full flex items-center justify-center">
                                     <Loader text="Loading Verses..." />
@@ -158,11 +196,23 @@ const QuranView = ({ onClose, t, language }) => {
                                     {/* Verses - Continuous Flow */}
                                     <div className="text-center" dir="rtl">
                                         <p className="font-light text-white/90 transition-all duration-300" style={{ fontFamily: 'Amiri, serif', fontSize: `${fontSize}px`, lineHeight: '1.8' }}>
-                                            {surahContent.arabic.ayahs.map((ayah, index) => (
-                                                <span key={ayah.number} className="inline relative px-1">
+                                            {surahContent.arabic.ayahs.map((ayah) => (
+                                                <span
+                                                    key={ayah.number}
+                                                    id={`ayah-${ayah.numberInSurah}`}
+                                                    ref={el => verseRefs.current[ayah.numberInSurah] = el}
+                                                    className={`inline relative px-1 group/ayah rounded-lg hover:bg-emerald-500/10 transition-colors cursor-pointer ${progress.sura === selectedSurah.number && progress.ayah === ayah.numberInSurah ? 'bg-emerald-500/20' : ''}`}
+                                                    onClick={() => handleSaveProgress(ayah.numberInSurah)}
+                                                    title="Click to save progress"
+                                                >
                                                     {ayah.text.replace('بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ', '')}
-                                                    <span className="inline-flex items-center justify-center w-10 h-10 mx-2 text-lg border border-emerald-500/40 rounded-full text-emerald-400 number-symbol align-middle">
+                                                    <span className="inline-flex items-center justify-center w-10 h-10 mx-2 text-lg border border-emerald-500/40 rounded-full text-emerald-400 number-symbol align-middle relative">
                                                         {ayah.numberInSurah}
+                                                        {progress.sura === selectedSurah.number && progress.ayah === ayah.numberInSurah && (
+                                                            <div className="absolute -top-2 -right-2 bg-amber-500 text-black p-1 rounded-full shadow-lg animate-bounce">
+                                                                <Bookmark size={10} fill="currentColor" />
+                                                            </div>
+                                                        )}
                                                     </span>
                                                 </span>
                                             ))}
