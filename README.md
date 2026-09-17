@@ -1,3 +1,5 @@
+![AdhanTime preview](docs/mockup.jpg)
+
 # AdhanTime
 
 AdhanTime is a modern, responsive web application that displays Islamic prayer times and weather conditions based on your real-time geolocation. It features a beautiful glassmorphism UI, 3D effects, and smooth animations.
