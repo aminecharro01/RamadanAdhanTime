@@ -2,6 +2,8 @@
 
 # AdhanTime
 
+🔗 Portfolio: https://www.aminecharro.me
+
 AdhanTime is a modern, responsive web application that displays Islamic prayer times and weather conditions based on your real-time geolocation. It features a beautiful glassmorphism UI, 3D effects, and smooth animations.
 
 ## Features
