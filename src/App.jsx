@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CalendarDays, BookOpen, CalendarRange, Compass, Sparkles, Settings } from 'lucide-react';
 
@@ -19,13 +19,15 @@ import CountdownTimer from './components/CountdownTimer';
 import DayTimeline from './components/DayTimeline';
 import RamadanCard from './components/RamadanCard';
 import WeatherCard from './components/WeatherCard';
-import CalendarView from './components/CalendarView';
-import QuranView from './components/QuranView';
-import MonthTimetable from './components/MonthTimetable';
-import QiblaView from './components/QiblaView';
-import AdhkarView from './components/AdhkarView';
-import SettingsView from './components/SettingsView';
 import CityPicker from './components/CityPicker';
+
+// Tool screens are loaded on demand to keep the first load small on phones
+const QuranView = lazy(() => import('./components/QuranView'));
+const CalendarView = lazy(() => import('./components/CalendarView'));
+const MonthTimetable = lazy(() => import('./components/MonthTimetable'));
+const QiblaView = lazy(() => import('./components/QiblaView'));
+const AdhkarView = lazy(() => import('./components/AdhkarView'));
+const SettingsView = lazy(() => import('./components/SettingsView'));
 import Footer from './components/Footer';
 import DailyDua from './components/DailyDua';
 import KhatmTracker from './components/KhatmTracker';
@@ -109,10 +111,8 @@ function App() {
       className={`min-h-screen w-full flex flex-col items-center px-4 pt-20 pb-28 sm:px-12 font-sans relative overflow-x-hidden text-slate-900 dark:text-white transition-colors duration-1000 ${bgGradient}`}
     >
       <div className="absolute inset-0 bg-black/10 pointer-events-none z-0"></div>
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-500/10 rounded-full blur-[100px] animate-pulse"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-500/10 rounded-full blur-[100px] animate-pulse delay-1000"></div>
-      </div>
+      {/* Static ambient glow (cheap to paint; the old animated 100px blurs were costly on phones) */}
+      <div className="ambient-glow absolute inset-0 pointer-events-none z-0" />
 
       {/* Top bar: city picker, settings, language */}
       <div className="fixed top-0 left-0 right-0 px-4 sm:px-6 py-4 z-50 flex justify-between items-center gap-2 bg-gradient-to-b from-black/25 to-transparent">
@@ -142,6 +142,7 @@ function App() {
         </div>
       </div>
 
+      <Suspense fallback={null}>
       <AnimatePresence>
         {(openView === 'quran' || openView === 'quran-resume') && (
           <QuranView key="quran" onClose={closeView} t={t} language={language} resume={openView === 'quran-resume'} />
@@ -165,6 +166,7 @@ function App() {
           <SettingsView key="settings" onClose={closeView} settings={settings} update={updateSettings} t={t} />
         )}
       </AnimatePresence>
+      </Suspense>
 
       <AnimatePresence mode="wait">
         {showGeoError ? (

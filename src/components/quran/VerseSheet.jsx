@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
-import { BookOpenText, Play, Repeat, BookmarkPlus, BookmarkCheck, Heart, Copy, Share2, Check, Flag } from 'lucide-react';
+import { useState, useEffect, lazy, Suspense } from 'react';
+import { BookOpenText, Play, Repeat, BookmarkPlus, BookmarkCheck, Heart, Copy, Share2, Check, Flag, ImageIcon } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import Modal from '../Modal';
 import { loadText } from '../../services/quranData';
+
+const StoryShare = lazy(() => import('../StoryShare'));
 
 const Action = ({ icon: Icon, label, onClick, active }) => (
     <button
@@ -17,6 +20,7 @@ const VerseSheet = ({ verse, surah, arabic, translation, fontCss, bookmarks, onP
     const [tafsir, setTafsir] = useState({ n: null, text: null, error: false });
     const [loopEnd, setLoopEnd] = useState(Math.min(surah.count, verse.a + 4));
     const [copied, setCopied] = useState(false);
+    const [story, setStory] = useState(null);
     const bookmark = bookmarks.find('bookmark', verse.s, verse.a);
     const favorite = bookmarks.find('favorite', verse.s, verse.a);
     const [note, setNote] = useState(bookmark?.note || '');
@@ -66,6 +70,18 @@ const VerseSheet = ({ verse, surah, arabic, translation, fontCss, bookmarks, onP
                     <Action icon={Heart} label={t.qFavorite} active={Boolean(favorite)} onClick={() => bookmarks.toggle('favorite', verse.s, verse.a)} />
                     <Action icon={copied ? Check : Copy} label={copied ? t.qCopied : t.qCopy} onClick={copy} />
                     {typeof navigator !== 'undefined' && navigator.share && <Action icon={Share2} label={t.qShare} onClick={share} />}
+                    <Action
+                        icon={ImageIcon}
+                        label={t.shareStory}
+                        onClick={() => setStory({
+                            arabic,
+                            translation: translation || null,
+                            source: `${language === 'ar' ? surah.name : surah.englishName} ${verse.s}:${verse.a}`,
+                            kicker: t.holyQuran,
+                            arabicFont: fontCss,
+                            filename: `quran-${verse.s}-${verse.a}.png`,
+                        })}
+                    />
                 </div>
 
                 <div className="rounded-xl bg-white/5 p-3 space-y-2">
@@ -109,6 +125,11 @@ const VerseSheet = ({ verse, surah, arabic, translation, fontCss, bookmarks, onP
                     )}
                 </div>
             </div>
+            <Suspense fallback={null}>
+                <AnimatePresence>
+                    {story && <StoryShare content={story} onClose={() => setStory(null)} t={t} />}
+                </AnimatePresence>
+            </Suspense>
         </Modal>
     );
 };

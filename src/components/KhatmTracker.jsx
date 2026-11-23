@@ -35,7 +35,7 @@ const KhatmTracker = ({ t, language, goalDays, goalStart, reminder, onContinue }
             className="w-full mt-6 mx-auto"
         >
             <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-5 shadow-xl relative overflow-hidden">
-                <div className="absolute top-0 end-0 w-40 h-40 bg-emerald-500/20 rounded-full blur-3xl -me-20 -mt-20 pointer-events-none"></div>
+                <div className="ambient-corner absolute top-0 end-0 w-48 h-48 -me-20 -mt-20 pointer-events-none"></div>
 
                 <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">

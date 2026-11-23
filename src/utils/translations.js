@@ -27,6 +27,18 @@ export const translations = {
         verses: "Verses",
         developedBy: "Developed by",
 
+        // Dua & story sharing
+        duaOfDay: "Dua of the day",
+        dua: "Dua",
+        previous: "Previous",
+        next: "Next",
+        shareStory: "Share as story",
+        share: "Share",
+        download: "Download",
+        copy: "Copy",
+        storyHint: "1080×1920 image (9:16), ready for Instagram, WhatsApp or Facebook stories.",
+        holyQuran: "The Holy Quran",
+
         // City picker
         searchCity: "Search city...",
         myLocation: "My location",
@@ -85,6 +97,7 @@ export const translations = {
         compassUnsupported: "No compass on this device. Use the angle from North with a physical compass.",
         compassHint: "Hold your phone flat. Turn until the arrow points up.",
         facingQibla: "You are facing the Qibla",
+        calibrateHint: "Compass accuracy is low: move your phone in a figure-8 to calibrate, away from metal and magnets.",
         distanceToKaaba: "Distance to the Kaaba",
         needLocation: "Select a city or allow location first.",
 
@@ -143,6 +156,17 @@ export const translations = {
         verses: "آيات",
         developedBy: "تطوير",
 
+        duaOfDay: "دعاء اليوم",
+        dua: "دعاء",
+        previous: "السابق",
+        next: "التالي",
+        shareStory: "مشاركة كقصة",
+        share: "مشاركة",
+        download: "تحميل",
+        copy: "نسخ",
+        storyHint: "صورة 1080×1920 (9:16) جاهزة لقصص إنستغرام وواتساب وفيسبوك.",
+        holyQuran: "القرآن الكريم",
+
         searchCity: "ابحث عن مدينة...",
         myLocation: "موقعي الحالي",
         recent: "الأخيرة",
@@ -195,6 +219,7 @@ export const translations = {
         compassUnsupported: "لا توجد بوصلة في هذا الجهاز. استعمل الزاوية من الشمال مع بوصلة.",
         compassHint: "ضع الهاتف بشكل مسطح وأدره حتى يشير السهم للأعلى.",
         facingQibla: "أنت في اتجاه القبلة",
+        calibrateHint: "دقة البوصلة ضعيفة: حرّك الهاتف على شكل الرقم 8 للمعايرة، بعيداً عن المعادن والمغناطيس.",
         distanceToKaaba: "المسافة إلى الكعبة",
         needLocation: "اختر مدينة أو اسمح بتحديد الموقع أولاً.",
 

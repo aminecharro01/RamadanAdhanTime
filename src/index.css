@@ -107,3 +107,41 @@ body {
     display: block !important;
   }
 }
+
+/* ---- Performance -------------------------------------------------------------------- */
+.ambient-glow {
+  background:
+    radial-gradient(40% 35% at 15% 10%, rgba(16, 185, 129, 0.16), transparent 70%),
+    radial-gradient(40% 35% at 90% 95%, rgba(59, 130, 246, 0.14), transparent 70%);
+}
+
+.ambient-corner {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.25), transparent 70%);
+}
+
+/* backdrop-filter is one of the most expensive effects on phone GPUs: on touch devices
+   use slightly more opaque surfaces instead of blurring what is behind them. */
+@media (hover: none) and (pointer: coarse) {
+  [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .modal-panel {
+    background-color: rgba(15, 23, 42, 0.97) !important;
+  }
+
+  .glass-card {
+    background-color: rgba(255, 255, 255, 0.14);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

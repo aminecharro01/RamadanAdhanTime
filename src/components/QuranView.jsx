@@ -11,6 +11,9 @@ import { useQuranPrefs, useBookmarks, useHifz, QURAN_FONTS, QURAN_THEMES, HIFZ_S
 import { useKhatmah } from '../hooks/useKhatmah';
 import { useQuranAudio } from '../context/QuranAudio';
 import { versesFor, selectionTitle } from '../services/quranData';
+import { ensureQuranFonts } from '../utils/loadFonts';
+
+ensureQuranFonts();
 
 const STATUS_LABEL = { memorized: 'qMemorized', learning: 'qLearning', review: 'qReview' };
 

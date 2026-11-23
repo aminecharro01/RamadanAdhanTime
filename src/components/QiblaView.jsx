@@ -23,28 +23,46 @@ const distanceKm = (lat, lng) => {
 const QiblaView = ({ onClose, coordinates, t }) => {
     const hasLocation = Boolean(coordinates.lat && coordinates.lng);
     const bearing = hasLocation ? qiblaBearing(Number(coordinates.lat), Number(coordinates.lng)) : null;
-    const [heading, setHeading] = useState(null);       // device heading from North, or null
+    const [heading, setHeading] = useState(null);       // smoothed device heading (unwrapped degrees), or null
     const [status, setStatus] = useState('idle');       // idle | active | unsupported
+    const [accuracy, setAccuracy] = useState(null);     // iOS compass accuracy in degrees (lower is better)
     const cleanup = useRef(null);
 
     useEffect(() => () => cleanup.current?.(), []);
 
     const startCompass = async () => {
+        // iOS (and recent Chrome versions) expose requestPermission. Its answer is not reliable on
+        // every browser, so we always listen and let the 3-second timeout decide if a compass exists.
         try {
             if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                const res = await DeviceOrientationEvent.requestPermission(); // iOS
-                if (res !== 'granted') { setStatus('unsupported'); return; }
+                await DeviceOrientationEvent.requestPermission();
             }
-        } catch { setStatus('unsupported'); return; }
+        } catch { /* permission prompt unavailable: keep listening anyway */ }
+        cleanup.current?.();
 
         let got = false;
+        let smooth = null;
         const onOrient = (e) => {
             let h = null;
-            if (typeof e.webkitCompassHeading === 'number') h = e.webkitCompassHeading;   // iOS
-            else if (e.absolute && typeof e.alpha === 'number') h = 360 - e.alpha;         // Android
-            if (h === null) return;
+            if (typeof e.webkitCompassHeading === 'number') {
+                h = e.webkitCompassHeading;                                   // iOS: already a compass heading
+                setAccuracy(typeof e.webkitCompassAccuracy === 'number' ? e.webkitCompassAccuracy : null);
+            } else if (e.absolute && typeof e.alpha === 'number') {
+                h = 360 - e.alpha;                                            // Android: alpha is counter-clockwise from North
+                // alpha is relative to the device's natural orientation: compensate for landscape
+                h += (screen.orientation?.angle ?? window.orientation ?? 0);
+            }
+            if (h === null || Number.isNaN(h)) return;
+            h = ((h % 360) + 360) % 360;
+            // Low-pass filter on the circle so the dial does not jitter (and wraps 359 -> 0 correctly)
+            // `smooth` is kept unwrapped (can go past 360) so the dial never spins the long way round
+            if (smooth === null) smooth = h;
+            else {
+                const delta = ((h - (((smooth % 360) + 360) % 360) + 540) % 360) - 180;
+                smooth += delta * 0.25;
+            }
             got = true;
-            setHeading((h + 360) % 360);
+            setHeading(smooth);
             setStatus('active');
         };
         const evt = 'ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation';
@@ -53,9 +71,15 @@ const QiblaView = ({ onClose, coordinates, t }) => {
         cleanup.current = () => { window.removeEventListener(evt, onOrient, true); clearTimeout(timer); };
     };
 
-    const dialRotation = heading === null ? 0 : -heading;
-    const diff = heading === null || bearing === null ? null : Math.abs(((bearing - heading + 540) % 360) - 180);
+    const dialRotation = heading === null ? 0 : -heading;                 // unwrapped: smooth CSS transition
+    const headingDeg = heading === null ? null : ((heading % 360) + 360) % 360;
+    const diff = headingDeg === null || bearing === null ? null : Math.abs(((bearing - headingDeg + 540) % 360) - 180);
     const facing = diff !== null && diff < 5;
+    const wasFacing = useRef(false);
+    useEffect(() => {
+        if (facing && !wasFacing.current) navigator.vibrate?.(60);
+        wasFacing.current = facing;
+    }, [facing]);
 
     return (
         <Modal title={t.qibla} icon={Compass} onClose={onClose}>
@@ -101,12 +125,15 @@ const QiblaView = ({ onClose, coordinates, t }) => {
 
                     {facing && <p className="text-emerald-300 font-semibold">{t.facingQibla}</p>}
 
-                    {status === 'idle' && (
+                    {(status === 'idle' || status === 'unsupported') && (
                         <button onClick={startCompass} className="px-5 py-2.5 rounded-full bg-emerald-500/80 hover:bg-emerald-500 font-semibold">
                             {t.enableCompass}
                         </button>
                     )}
                     {status === 'active' && <p className="text-xs text-white/50 text-center">{t.compassHint}</p>}
+                    {status === 'active' && (accuracy === null ? false : accuracy < 0 || accuracy > 25) && (
+                        <p className="text-xs text-amber-200 text-center max-w-xs">{t.calibrateHint}</p>
+                    )}
                     {status === 'unsupported' && <p className="text-xs text-white/60 text-center max-w-xs">{t.compassUnsupported}</p>}
                 </div>
             )}

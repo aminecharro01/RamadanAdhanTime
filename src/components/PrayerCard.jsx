@@ -15,10 +15,6 @@ const PrayerCard = ({ name, time, isNext, isCurrent, isPast, isSolar, nowLabel }
                 ${isPast && !isCurrent ? 'opacity-55' : 'opacity-100'}
             `}
         >
-            {isNext && (
-                <div className="absolute inset-0 bg-emerald-400/10 blur-xl rounded-full -z-10 animate-pulse"></div>
-            )}
-
             <div className="flex justify-between items-center gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                     {isSolar && <Sunrise size={16} className="text-amber-200/70 shrink-0" />}
