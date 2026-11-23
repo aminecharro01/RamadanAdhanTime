@@ -23,3 +23,18 @@ export const getProgressPercentage = (suraNumber, ayahNumber) => {
     const abs = getAbsoluteAyahNumber(suraNumber, ayahNumber);
     return Math.min(100, Math.max(0, (abs / TOTAL_AYAHS) * 100));
 };
+
+// ---- Daily wird ----------------------------------------------------------------------------
+// The Quran has 60 hizbs (240 quarters). The wird is how many hizbs to read per day to finish
+// in `goalDays`, starting from the hizb of the current reading position.
+export const hizbsPerDay = (goalDays) => Math.max(1, Math.ceil(60 / Math.max(1, goalDays)));
+
+export const todaysWird = (progress, goalDays) => {
+    const from = Math.min(60, Math.max(1, Math.ceil((progress?.hq || 1) / 4)));
+    const to = Math.min(60, from + hizbsPerDay(goalDays) - 1);
+    return { from, to };
+};
+
+export const wirdLabel = (wird, t) => (wird.from === wird.to
+    ? t.qWirdHizb.replace('{from}', wird.from)
+    : t.qWirdHizbs.replace('{from}', wird.from).replace('{to}', wird.to));

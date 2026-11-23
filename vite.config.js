@@ -9,6 +9,31 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      workbox: {
+        runtimeCaching: [
+          {
+            // Recitations already listened to stay available offline
+            urlPattern: ({ url }) => url.hostname === 'cdn.islamic.network' || url.hostname === 'everyayah.com',
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'quran-audio',
+              rangeRequests: true,
+              expiration: { maxEntries: 1500, maxAgeSeconds: 60 * 60 * 24 * 90 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com',
+            handler: 'StaleWhileRevalidate',
+            options: { cacheName: 'google-fonts', expiration: { maxEntries: 40 } },
+          },
+          {
+            urlPattern: ({ url }) => url.hostname === 'api.alquran.cloud' || url.hostname === 'cdn.jsdelivr.net',
+            handler: 'NetworkFirst',
+            options: { cacheName: 'quran-api', networkTimeoutSeconds: 8, expiration: { maxEntries: 60 } },
+          },
+        ],
+      },
       manifest: {
         name: 'AdhanTime',
         short_name: 'AdhanTime',

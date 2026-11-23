@@ -44,3 +44,66 @@ body {
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
   }
 }
+
+/* Only shown when printing (e.g. the month timetable title) */
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+
+  .print-area {
+    position: absolute !important;
+    inset: 0 !important;
+    background: #fff !important;
+    backdrop-filter: none !important;
+    display: block !important;
+  }
+
+  .print-area .modal-panel {
+    max-height: none !important;
+    max-width: none !important;
+    background: #fff !important;
+    color: #000 !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    transform: none !important;
+  }
+
+  .print-area .overflow-y-auto {
+    overflow: visible !important;
+  }
+
+  .print-area table,
+  .print-area th,
+  .print-area td {
+    color: #000 !important;
+    background: #fff !important;
+    border-color: #ccc !important;
+  }
+
+  .print-area thead {
+    position: static !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+}
