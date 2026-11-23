@@ -67,7 +67,7 @@ const CalendarView = ({ onClose, t, language }) => {
 
                     <div className="text-center">
                         <span className="text-lg font-semibold text-white block">
-                            {new Date(year, month - 1).toLocaleString(language === 'ar' ? 'ar' : 'en', { month: 'long', year: 'numeric' })}
+                            {t.monthNames[month - 1]} <span dir="ltr">{year}</span>
                         </span>
                     </div>
 

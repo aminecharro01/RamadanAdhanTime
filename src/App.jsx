@@ -1,151 +1,141 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { CalendarDays, BookOpen, CalendarRange, Compass, Sparkles, Settings } from 'lucide-react';
+
 import { useGeolocation } from './hooks/useGeolocation';
 import { usePrayerTimes } from './hooks/usePrayerTimes';
 import { useWeather } from './hooks/useWeather';
 import { useLanguage } from './hooks/useLanguage';
-import { getNextPrayer, formatTime } from './utils/dateUtils';
+import { useSettings } from './hooks/useSettings';
+import { useNow } from './hooks/useNow';
+import { useNotifications } from './hooks/useNotifications';
+import { getPrayerSchedule, formatTime, toDateKey } from './utils/dateUtils';
+import { getGradientClass } from './utils/gradientUtils';
+import { cities, findNearestCity, LOCAL_LOCATION } from './data/cities';
+
 import LocationHeader from './components/LocationHeader';
 import PrayerCard from './components/PrayerCard';
 import CountdownTimer from './components/CountdownTimer';
+import DayTimeline from './components/DayTimeline';
+import RamadanCard from './components/RamadanCard';
 import WeatherCard from './components/WeatherCard';
 import CalendarView from './components/CalendarView';
 import QuranView from './components/QuranView';
+import MonthTimetable from './components/MonthTimetable';
+import QiblaView from './components/QiblaView';
+import AdhkarView from './components/AdhkarView';
+import SettingsView from './components/SettingsView';
+import CityPicker from './components/CityPicker';
 import Footer from './components/Footer';
 import DailyDua from './components/DailyDua';
-import KhatmTracker from './components/KhatmTracker'; // [NEW]
+import KhatmTracker from './components/KhatmTracker';
 import Loader from './components/Loader';
-import { motion, AnimatePresence } from 'framer-motion';
-import { cities } from './data/cities';
-import { MapPin, CalendarDays, BookOpen } from 'lucide-react';
-import { getGradientClass } from './utils/gradientUtils'; // [NEW]
+import AudioPlayerBar from './components/AudioPlayerBar';
+
+const PRAYER_ROWS = ['Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 
 function App() {
   const geo = useGeolocation();
   const { toggleLanguage, t, isRTL, language } = useLanguage();
+  const [settings, updateSettings] = useSettings();
+  const now = useNow(10000);
+  const dateKey = toDateKey(now);
 
-  const [selectedCity, setSelectedCity] = useState(cities[0]);
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [showQuran, setShowQuran] = useState(false); // [NEW]
+  const [openView, setOpenView] = useState(null); // 'quran' | 'calendar' | 'timetable' | 'qibla' | 'adhkar' | 'settings'
+  const closeView = () => setOpenView(null);
 
-  // Determine which coordinates to use
-  const coordinates = selectedCity.lat
-    ? { lat: selectedCity.lat, lng: selectedCity.lng }
-    : geo.coordinates;
+  // Location: a chosen city, or GPS matched to the nearest Habous city (if any within 50 km)
+  const selectedCity = cities.find(c => c.id === settings.cityId) || LOCAL_LOCATION;
+  const isLocal = selectedCity.id === LOCAL_LOCATION.id;
+  const coordinates = isLocal ? geo.coordinates : { lat: selectedCity.lat, lng: selectedCity.lng };
+  const nearestCity = isLocal ? findNearestCity(coordinates.lat, coordinates.lng) : selectedCity;
+  const habousCityId = nearestCity?.id ?? null;
 
-  const { data: prayerData, loading: prayerLoading, error: prayerError } = usePrayerTimes(coordinates);
+  const { today, tomorrow, loading: prayerLoading, error: prayerError } = usePrayerTimes(coordinates, habousCityId, dateKey);
   const { weather, loading: weatherLoading } = useWeather(coordinates);
 
-  const [nextPrayer, setNextPrayer] = useState(null);
-  const [todayPrayers, setTodayPrayers] = useState([]);
+  const cityLabel = (c) => (language === 'ar' && c?.nameAr ? c.nameAr : c?.name);
+  const displayCity = !isLocal
+    ? cityLabel(selectedCity)
+    : nearestCity ? cityLabel(nearestCity) : (weather?.city || t.locating);
 
-  useEffect(() => {
-    if (prayerData) {
-      const timings = prayerData.timings;
-      const next = getNextPrayer(timings);
-      setNextPrayer(next);
+  const schedule = useMemo(() => getPrayerSchedule(today, tomorrow, now), [today, tomorrow, now]);
 
-      setTodayPrayers([
-        { id: 'Fajr', name: t.fajr, time: formatTime(timings.Fajr) },
-        { id: 'Sunrise', name: t.sunrise, time: formatTime(timings.Sunrise), isSolar: true },
-        { id: 'Dhuhr', name: t.dhuhr, time: formatTime(timings.Dhuhr) },
-        { id: 'Asr', name: t.asr, time: formatTime(timings.Asr) },
-        { id: 'Maghrib', name: t.maghrib, time: formatTime(timings.Maghrib) },
-        { id: 'Isha', name: t.isha, time: formatTime(timings.Isha) }
-      ]);
-    }
-  }, [prayerData, t]); // Re-run when language changes
+  useNotifications({ settings, today, tomorrow, t, cityName: displayCity });
 
-  // Handle city change
-  const handleCityChange = (e) => {
-    const cityName = e.target.value;
-    // Find based on English name for Logic, but display might need handling
-    // The value of option is still the English name key from cities array
-    const city = cities.find(c => c.name === cityName);
-    setSelectedCity(city);
+  const selectCity = (city) => {
+    updateSettings(prev => ({
+      cityId: city.id,
+      recentCityIds: city.id === LOCAL_LOCATION.id
+        ? prev.recentCityIds
+        : [city.id, ...prev.recentCityIds.filter(id => id !== city.id)].slice(0, 5),
+    }));
   };
 
-  // Derived loading state
-  // Only show full page loader if we have NO data to show yet
-  const isInitialLoading = !selectedCity.lat && !geo.loaded && !geo.error;
-  const isFirstLoad = !prayerData && prayerLoading;
-
-  const showFullLoader = isInitialLoading || (prayerLoading && !prayerData && !prayerError);
-
-  // Valid city name to display
-  const displayCity = selectedCity.lat
-    ? (language === 'ar' && selectedCity.nameAr ? selectedCity.nameAr : selectedCity.name)
-    : (weather?.city || t.locating);
+  // Gregorian date with Latin digits in both languages, e.g. "Monday 23 November 2026"
+  const gregorianText = useMemo(() => {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return `${t.weekdays[date.getDay()]} ${d} ${t.monthNames[m - 1]} ${y}`;
+  }, [dateKey, t]);
 
   const [bgGradient, setBgGradient] = useState(getGradientClass());
-
   useEffect(() => {
-    // Update gradient every minute
-    const interval = setInterval(() => {
-      setBgGradient(getGradientClass());
-    }, 60000);
+    const interval = setInterval(() => setBgGradient(getGradientClass()), 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Full-page loader only while there is nothing to show yet
+  const waitingForGeo = isLocal && !geo.loaded;
+  const showFullLoader = !today && (waitingForGeo || prayerLoading);
+  const showGeoError = isLocal && geo.error && !today;
+
+  const prayerName = (key) => t[key.toLowerCase()];
+  const countdownTitle = schedule.next
+    ? `${t.upcoming}: ${prayerName(schedule.next.name)}${schedule.next.isTomorrow ? ` · ${t.tomorrow}` : ''}`
+    : '';
+
+  const tools = [
+    { id: 'quran', icon: BookOpen, label: t.quran },
+    { id: 'adhkar', icon: Sparkles, label: t.adhkar },
+    { id: 'qibla', icon: Compass, label: t.qibla },
+    { id: 'timetable', icon: CalendarRange, label: t.timetable },
+    { id: 'calendar', icon: CalendarDays, label: t.calendar },
+  ];
 
   return (
     <div
       dir={isRTL ? 'rtl' : 'ltr'}
-      className={`min-h-screen w-full flex flex-col items-center p-6 sm:p-12 font-sans relative overflow-hidden text-slate-900 dark:text-white transition-colors duration-1000 ${bgGradient}`}
+      className={`min-h-screen w-full flex flex-col items-center px-4 pt-20 pb-28 sm:px-12 font-sans relative overflow-x-hidden text-slate-900 dark:text-white transition-colors duration-1000 ${bgGradient}`}
     >
-      {/* Dark Overlay for readability (optional, adjusted opacity) */}
       <div className="absolute inset-0 bg-black/10 pointer-events-none z-0"></div>
-
-      {/* Ambient Animated Background Elements (Optional - keeping subtle) */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-500/10 rounded-full blur-[100px] animate-pulse"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-500/10 rounded-full blur-[100px] animate-pulse delay-1000"></div>
       </div>
 
-      {/* Top Bar: settings & city select */}
-      <div className="absolute top-6 left-6 right-6 z-50 flex justify-between items-center pointer-events-none">
-        {/* City Select Dropdown */}
-        <div className="pointer-events-auto relative group">
-          <div className={`absolute inset-y-0 ${isRTL ? 'right-0 pr-3' : 'left-0 pl-3'} flex items-center pointer-events-none`}>
-            <MapPin className="h-4 w-4 text-white/70" />
-          </div>
-          <select
-            value={selectedCity.name}
-            onChange={handleCityChange}
-            className={`bg-white/10 backdrop-blur-md border border-white/20 text-white text-sm rounded-full ${isRTL ? 'pr-9 pl-8' : 'pl-9 pr-8'} py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 appearance-none cursor-pointer hover:bg-white/20 transition-all`}
-          >
-            {cities.map(city => (
-              <option key={city.name} value={city.name} className="bg-slate-800 text-white">
-                {language === 'ar' && city.nameAr ? city.nameAr : city.name}
-              </option>
-            ))}
-          </select>
-          {/* Custom arrow for select */}
-          <div className={`absolute inset-y-0 ${isRTL ? 'left-0 pl-3' : 'right-0 pr-3'} flex items-center pointer-events-none`}>
-            <svg className="h-4 w-4 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </div>
-
-        <div className="pointer-events-auto flex items-center gap-2">
+      {/* Top bar: city picker, settings, language */}
+      <div className="fixed top-0 left-0 right-0 px-4 sm:px-6 py-4 z-50 flex justify-between items-center gap-2 bg-gradient-to-b from-black/25 to-transparent">
+        <CityPicker
+          selectedCity={selectedCity}
+          displayName={displayCity}
+          recentIds={settings.recentCityIds}
+          onSelect={selectCity}
+          t={t}
+          language={language}
+        />
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowQuran(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all duration-300 text-white"
-            title={t.quran}
+            onClick={() => setOpenView('settings')}
+            className="p-2.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all text-white"
+            title={t.settings}
+            aria-label={t.settings}
           >
-            <BookOpen size={20} />
-            <span className="font-medium hidden sm:inline">{t.quran}</span>
-          </button>
-          <button
-            onClick={() => setShowCalendar(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all duration-300 text-white"
-            title={t.calendar}
-          >
-            <CalendarDays size={20} />
-            <span className="font-medium hidden sm:inline">{t.calendar}</span>
+            <Settings size={20} />
           </button>
           <button
             onClick={toggleLanguage}
-            className="p-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all duration-300 text-white font-bold"
+            className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/20 shadow-lg hover:bg-white/20 transition-all text-white font-bold"
           >
             {language === 'ar' ? 'EN' : 'ع'}
           </button>
@@ -153,43 +143,47 @@ function App() {
       </div>
 
       <AnimatePresence>
-        {showQuran && (
-          <QuranView
-            onClose={() => setShowQuran(false)}
+        {(openView === 'quran' || openView === 'quran-resume') && (
+          <QuranView key="quran" onClose={closeView} t={t} language={language} resume={openView === 'quran-resume'} />
+        )}
+        {openView === 'calendar' && <CalendarView key="calendar" onClose={closeView} t={t} language={language} />}
+        {openView === 'timetable' && (
+          <MonthTimetable
+            key="timetable"
+            onClose={closeView}
+            coordinates={coordinates}
+            habousCityId={habousCityId}
+            cityName={displayCity}
+            use24h={settings.use24h}
             t={t}
             language={language}
           />
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showCalendar && (
-          <CalendarView
-            onClose={() => setShowCalendar(false)}
-            t={t}
-            language={language}
-          />
+        {openView === 'qibla' && <QiblaView key="qibla" onClose={closeView} coordinates={coordinates} t={t} />}
+        {openView === 'adhkar' && <AdhkarView key="adhkar" onClose={closeView} t={t} language={language} />}
+        {openView === 'settings' && (
+          <SettingsView key="settings" onClose={closeView} settings={settings} update={updateSettings} t={t} />
         )}
       </AnimatePresence>
 
       <AnimatePresence mode="wait">
-        {showFullLoader ? (
-          <motion.div
-            key="loader"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex-1 flex items-center justify-center"
-          >
-            {(!selectedCity.lat && geo.error) ? (
-              <div className="text-center text-white p-6 glass-card">
-                <p className="text-xl font-bold mb-2">{t.locationRequired}</p>
-                <p className="opacity-80 mb-4">{geo.error.message}</p>
-                <p className="text-sm mb-4 opacity-60">{t.enableLocation}</p>
-              </div>
-            ) : (
-              <Loader text={t.locating} />
-            )}
+        {showGeoError ? (
+          <motion.div key="geo-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex items-center justify-center z-10">
+            <div className="text-center text-white p-6 glass-card max-w-sm">
+              <p className="text-xl font-bold mb-2">{t.locationRequired}</p>
+              <p className="opacity-80 mb-4">{geo.error.message}</p>
+              <p className="text-sm opacity-60">{t.enableLocation}</p>
+            </div>
+          </motion.div>
+        ) : showFullLoader ? (
+          <motion.div key="loader" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 flex items-center justify-center">
+            <Loader text={t.locating} />
+          </motion.div>
+        ) : !today ? (
+          <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-1 flex items-center justify-center z-10">
+            <div className="text-center text-white p-6 glass-card max-w-sm">
+              <p className="opacity-80">{prayerError ? t.loadError : t.enableLocation}</p>
+            </div>
           </motion.div>
         ) : (
           <motion.div
@@ -197,48 +191,82 @@ function App() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className={`w-full max-w-md z-10 flex flex-col flex-1 mt-12 transition-opacity duration-300 ${prayerLoading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}
+            className="w-full max-w-md z-10 flex flex-col flex-1"
           >
             <LocationHeader
-              city={displayCity}
-              date={prayerData?.date?.gregorian?.date}
-              hijriRaw={prayerData?.date?.hijri}
+              gregorian={gregorianText}
+              hijri={today.hijri}
               appTitle={t.appTitle}
+              source={today.source}
+              t={t}
+              language={language}
             />
 
             <DailyDua language={language} t={t} />
 
-            {nextPrayer && (
+            {schedule.next && (
               <CountdownTimer
-                nextPrayer={nextPrayer}
-                labels={{ upcoming: t.upcoming, hrs: t.hrs, min: t.min, sec: t.sec }}
-                onComplete={() => window.location.reload()}
+                title={countdownTitle}
+                target={schedule.next.time}
+                labels={{ hrs: t.hrs, min: t.min, sec: t.sec }}
               />
             )}
 
-            <div className="grid grid-cols-1 gap-3 mt-4">
-              {todayPrayers.map((prayer) => {
-                const isNext = nextPrayer?.name === prayer.id;
+            <RamadanCard today={today} tomorrow={tomorrow} now={now} use24h={settings.use24h} t={t} />
+
+            <DayTimeline
+              times={schedule.times}
+              now={now}
+              labels={Object.fromEntries(PRAYER_ROWS.map(k => [k, prayerName(k)]))}
+            />
+
+            <div className="grid grid-cols-1 gap-2.5">
+              {PRAYER_ROWS.map((key) => {
+                const time = schedule.times[key];
                 return (
                   <PrayerCard
-                    key={prayer.id}
-                    name={prayer.name}
-                    time={prayer.time}
-                    isNext={isNext}
-                    isPast={false}
+                    key={key}
+                    name={prayerName(key)}
+                    time={formatTime(today.timings[key], settings.use24h)}
+                    isSolar={key === 'Sunrise'}
+                    isNext={!schedule.next?.isTomorrow && schedule.next?.name === key}
+                    isCurrent={schedule.current === key}
+                    isPast={time ? time <= now : false}
+                    nowLabel={t.now}
                   />
                 );
               })}
             </div>
 
+            {/* Tools */}
+            <div className="grid grid-cols-5 gap-2 mt-6">
+              {tools.map(({ id, icon: Icon, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setOpenView(id)}
+                  className="flex flex-col items-center gap-1.5 py-3 px-1 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 hover:bg-white/20 transition-all text-white"
+                >
+                  <Icon size={22} className="text-emerald-300" />
+                  <span className="text-[11px] font-medium leading-tight text-center">{label}</span>
+                </button>
+              ))}
+            </div>
+
             {!weatherLoading && weather && <WeatherCard weather={{ ...weather, city: displayCity }} bgLabel={t.currentWeather} />}
 
-            <KhatmTracker t={t} language={language} />
-
+            <KhatmTracker
+              t={t}
+              language={language}
+              goalDays={settings.khatmahDays}
+              goalStart={settings.khatmahStart}
+              reminder={settings.khatmahReminder}
+              onContinue={() => setOpenView('quran-resume')}
+            />
           </motion.div>
         )}
       </AnimatePresence>
 
+      <AudioPlayerBar language={language} />
       <Footer t={t} />
     </div>
   );

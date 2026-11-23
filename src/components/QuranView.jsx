@@ -1,259 +1,293 @@
-import { useState, useEffect, useRef } from 'react';
-import { useQuran } from '../hooks/useQuran';
-import { useKhatmah } from '../hooks/useKhatmah'; // [NEW]
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, ChevronLeft, ChevronRight, BookOpen, Save, Bookmark } from 'lucide-react';
+import { X, ChevronLeft, BookOpen, Settings2, Play, Pause, Eye, EyeOff, Check } from 'lucide-react';
 import Loader from './Loader';
+import QuranIndex from './quran/QuranIndex';
+import QuranReader from './quran/QuranReader';
+import VerseSheet from './quran/VerseSheet';
+import ReaderSettings from './quran/ReaderSettings';
+import { useQuranData } from '../hooks/useQuranData';
+import { useQuranPrefs, useBookmarks, useHifz, QURAN_FONTS, QURAN_THEMES, HIFZ_STATUSES } from '../hooks/useQuranStore';
+import { useKhatmah } from '../hooks/useKhatmah';
+import { useQuranAudio } from '../context/QuranAudio';
+import { versesFor, selectionTitle } from '../services/quranData';
 
-const QuranView = ({ onClose, t, language }) => {
-    const { surahs, getSurah, loading: hookLoading, error } = useQuran();
-    const { progress, saveProgress } = useKhatmah(); // [NEW]
-    const [selectedSurah, setSelectedSurah] = useState(null);
-    const [surahContent, setSurahContent] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [contentLoading, setContentLoading] = useState(false);
-    const [fontSize, setFontSize] = useState(36);
-    const [savedPopup, setSavedPopup] = useState(false); // [NEW] Feedback state
+const STATUS_LABEL = { memorized: 'qMemorized', learning: 'qLearning', review: 'qReview' };
 
-    const verseRefs = useRef({}); // [NEW] Refs for scrolling
+const QuranView = ({ onClose, t, language, resume = false }) => {
+    const [prefs, updatePrefs] = useQuranPrefs();
+    const { meta, text, translation, loading, error, retry } = useQuranData(prefs.riwaya, prefs.translation);
+    const { progress, saveProgress, streak, pagesToday } = useKhatmah();
+    const bookmarks = useBookmarks();
+    const [hifz, setHifz] = useHifz();
+    const audio = useQuranAudio();
 
-    // Auto-scroll to saved verse when content loads
+    const [tab, setTab] = useState('surah');
+    const [query, setQuery] = useState('');
+    const [selection, setSelection] = useState(null);   // { type, value }
+    const [focusN, setFocusN] = useState(null);
+    const [sheetVerse, setSheetVerse] = useState(null);
+    const [showSettings, setShowSettings] = useState(false);
+    const [hideText, setHideText] = useState(false);
+    const [revealed, setRevealed] = useState(() => new Set());
+    const [toast, setToast] = useState(null);
+    const [resumed, setResumed] = useState(false);
+
+    const theme = QURAN_THEMES[prefs.theme] || QURAN_THEMES.dark;
+    const fontCss = QURAN_FONTS[prefs.font]?.css || QURAN_FONTS.amiri.css;
+
+    // Apply saved reciter / repeat options to the shared player
     useEffect(() => {
-        if (surahContent && selectedSurah && progress.sura === selectedSurah.number) {
-            const savedAyah = progress.ayah;
-            const element = verseRefs.current[savedAyah];
-            if (element) {
-                setTimeout(() => {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 500); // Small delay to ensure rendering
-            }
-        }
-    }, [surahContent, selectedSurah, progress]);
+        audio.setOptions({ reciterId: prefs.reciterId, repeatVerse: prefs.repeatVerse });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-    const handleZoomIn = () => setFontSize(prev => Math.min(prev + 4, 80));
-    const handleZoomOut = () => setFontSize(prev => Math.max(prev - 4, 20));
+    // Keep the screen on while reading (Wake Lock API)
+    useEffect(() => {
+        if (!prefs.keepAwake || !selection || !('wakeLock' in navigator)) return;
+        let lock = null;
+        const acquire = () => navigator.wakeLock.request('screen').then(l => { lock = l; }).catch(() => { });
+        const onVisible = () => { if (document.visibilityState === 'visible') acquire(); };
+        acquire();
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            document.removeEventListener('visibilitychange', onVisible);
+            lock?.release().catch(() => { });
+        };
+    }, [prefs.keepAwake, selection]);
 
-    // Filter surahs
-    const filteredSurahs = surahs.filter(s =>
-        s.englishName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.name.includes(searchTerm) ||
-        String(s.number).includes(searchTerm)
-    );
+    const progressN = meta && progress?.timestamp > 0 ? meta.surahs[progress.sura - 1].start + progress.ayah - 1 : null;
 
-    const handleSurahClick = async (surah) => {
-        setSelectedSurah(surah);
-        setContentLoading(true);
-        const data = await getSurah(surah.number);
-        setSurahContent(data);
-        setContentLoading(false);
+    const open = (sel, focus = null) => {
+        setSelection(sel);
+        setFocusN(focus);
+        setRevealed(new Set());
+        setQuery('');
     };
 
-    const handleBack = () => {
-        setSelectedSurah(null);
-        setSurahContent(null);
+    const openContinue = () => {
+        if (!meta || !progressN) return;
+        open({ type: 'surah', value: progress.sura }, progressN);
     };
 
-    const handleSaveProgress = (ayahNumber) => {
-        saveProgress(selectedSurah.number, ayahNumber);
-        setSavedPopup(ayahNumber);
-        setTimeout(() => setSavedPopup(false), 2000);
+    // "Continue reading" from the home screen opens straight at the saved verse
+    if (resume && meta && !resumed) {
+        setResumed(true);
+        if (progressN) open({ type: 'surah', value: progress.sura }, progressN);
+    }
+
+    // Mushaf layout always shows whole pages
+    const effective = useMemo(() => {
+        if (!selection || !meta) return selection;
+        if (prefs.mode !== 'mushaf' || selection.type === 'page') return selection;
+        const anchor = (focusN && meta.verses[focusN - 1]) || versesFor(meta, selection)[0];
+        return { type: 'page', value: anchor.page };
+    }, [selection, prefs.mode, focusN, meta]);
+
+    const queueFrom = (verses) => verses.map(v => ({
+        n: v.n, s: v.s, a: v.a,
+        label: `${language === 'ar' ? meta.surahs[v.s - 1].name : meta.surahs[v.s - 1].englishName} ${v.s}:${v.a}`,
+    }));
+
+    const selVerses = useMemo(() => (effective && meta ? versesFor(meta, effective) : []), [effective, meta]);
+    const playingHere = audio.current && selVerses.some(v => v.n === audio.current.n);
+
+    const playSelection = () => {
+        if (playingHere) { audio.toggle(); return; }
+        const start = Math.max(0, selVerses.findIndex(v => v.n === focusN));
+        audio.playQueue(queueFrom(selVerses), start, { loopQueue: false });
     };
+
+    const showToast = (msg) => {
+        setToast(msg);
+        setTimeout(() => setToast(null), 1800);
+    };
+
+    const sheetSurah = sheetVerse && meta.surahs[sheetVerse.s - 1];
 
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed inset-0 z-50 flex flex-col bg-slate-900/95 backdrop-blur-3xl text-slate-100"
+            className={`fixed inset-0 z-50 flex flex-col backdrop-blur-3xl ${theme.page}`}
+            dir={language === 'ar' ? 'rtl' : 'ltr'}
         >
+            {/* Header */}
+            <div className="flex items-center gap-2 px-3 sm:px-6 py-3 border-b border-current/10">
+                {selection ? (
+                    <button onClick={() => setSelection(null)} className="p-2 rounded-full hover:bg-current/10" aria-label="Back">
+                        <ChevronLeft size={24} className={language === 'ar' ? 'rotate-180' : ''} />
+                    </button>
+                ) : (
+                    <BookOpen className={theme.accent} size={24} />
+                )}
+                <h2 className="flex-1 min-w-0 text-lg sm:text-xl font-bold truncate" style={selection?.type === 'surah' && language === 'ar' ? { fontFamily: fontCss } : undefined}>
+                    {selection && meta ? selectionTitle(effective, meta, t, language) : t.quran}
+                </h2>
 
-            {/* Header - Full Width */}
-            <div className="flex justify-between items-center p-6 md:px-12 border-b border-white/10 bg-black/20 sticky top-0 z-10">
-                <div className="flex items-center gap-4">
-                    {selectedSurah && (
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={handleBack}
-                                className="p-3 hover:bg-white/10 rounded-full transition-colors"
-                            >
-                                <ChevronLeft size={24} className={language === 'ar' ? 'rotate-180' : ''} />
-                            </button>
-                            {/* Font Size Controls */}
-                            <div className="flex items-center gap-1 bg-white/5 rounded-full p-1 border border-white/10">
-                                <button onClick={handleZoomOut} className="p-2 hover:bg-white/10 rounded-full transition-colors text-xs font-bold w-10 h-10 flex items-center justify-center">A-</button>
-                                <button onClick={handleZoomIn} className="p-2 hover:bg-white/10 rounded-full transition-colors text-sm font-bold w-10 h-10 flex items-center justify-center">A+</button>
-                            </div>
-                        </div>
-                    )}
-                    <h2 className="text-3xl font-bold flex items-center gap-3 font-serif" style={{ fontFamily: 'Amiri, serif' }}>
-                        <BookOpen className="text-emerald-400" size={28} />
-                        {selectedSurah ? selectedSurah.name : t.quran}
-                    </h2>
-                </div>
-                <button
-                    onClick={onClose}
-                    className="p-3 hover:bg-white/10 rounded-full transition-colors hover:rotate-90 duration-300"
-                >
-                    <X size={28} />
+                {selection && meta && (
+                    <>
+                        <button
+                            onClick={playSelection}
+                            className="p-2 rounded-full bg-emerald-500 text-white hover:bg-emerald-600"
+                            aria-label={audio.playing && playingHere ? t.qPause : t.qPlay}
+                        >
+                            {audio.playing && playingHere ? <Pause size={20} /> : <Play size={20} />}
+                        </button>
+                        <button
+                            onClick={() => { setHideText(h => !h); setRevealed(new Set()); }}
+                            className={`p-2 rounded-full hover:bg-current/10 ${hideText ? theme.accent : ''}`}
+                            title={t.qHideText}
+                            aria-pressed={hideText}
+                        >
+                            {hideText ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </button>
+                    </>
+                )}
+                <button onClick={() => setShowSettings(true)} className="p-2 rounded-full hover:bg-current/10" aria-label={t.qSettings}>
+                    <Settings2 size={20} />
+                </button>
+                <button onClick={onClose} className="p-2 rounded-full hover:bg-current/10" aria-label={t.close}>
+                    <X size={24} />
                 </button>
             </div>
 
-            {/* Content Area - Full Width */}
-            <div className="flex-1 overflow-hidden relative w-full max-w-7xl mx-auto">
-                <AnimatePresence mode="wait">
-                    {!selectedSurah ? (
-                        /* Surah List View */
-                        <motion.div
-                            key="list"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="h-full flex flex-col p-4 md:p-8"
+            {/* Hifz bar for a surah */}
+            {selection?.type === 'surah' && effective?.type === 'surah' && (
+                <div className="flex items-center gap-2 px-3 sm:px-6 py-2 text-xs border-b border-current/10 overflow-x-auto">
+                    <span className={theme.muted}>{t.qSetStatus}:</span>
+                    {HIFZ_STATUSES.map(st => (
+                        <button
+                            key={st}
+                            onClick={() => setHifz(selection.value, st)}
+                            className={`px-2.5 py-1 rounded-full border whitespace-nowrap ${hifz[selection.value] === st ? 'bg-emerald-500 text-white border-emerald-500' : 'border-current/20'}`}
                         >
-                            {/* Search Bar */}
-                            <div className="mb-8 max-w-2xl mx-auto w-full space-y-4">
-                                {/* Resume Button */}
-                                {progress.sura > 0 && (
-                                    <motion.button
-                                        initial={{ opacity: 0, y: -10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded-2xl p-4 flex items-center justify-between group transition-all"
-                                        onClick={() => {
-                                            const savedSurah = surahs.find(s => s.number === progress.sura);
-                                            if (savedSurah) handleSurahClick(savedSurah);
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-full bg-emerald-500 text-black flex items-center justify-center">
-                                                <Bookmark size={20} fill="currentColor" />
-                                            </div>
-                                            <div className="text-left">
-                                                <div className="text-emerald-400 font-bold text-sm uppercase tracking-wide">
-                                                    {language === 'ar' ? 'تابع القراءة' : 'Continue Reading'}
-                                                </div>
-                                                <div className="text-white text-lg font-serif">
-                                                    {language === 'ar' ? `سورة ${progress.sura} : آية ${progress.ayah}` : `Surah ${progress.sura} : Ayah ${progress.ayah}`}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <ChevronRight size={24} className={`text-emerald-400 group-hover:translate-x-1 transition-transform ${language === 'ar' ? 'rotate-180 group-hover:-translate-x-1' : ''}`} />
-                                    </motion.button>
-                                )}
-
-                                <div className="relative">
-                                    <Search className={`absolute top-4 ${language === 'ar' ? 'right-5' : 'left-5'} text-white/50`} size={24} />
-                                    <input
-                                        type="text"
-                                        placeholder={t.searchSurah}
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className={`w-full bg-white/5 border border-white/10 rounded-2xl py-4 ${language === 'ar' ? 'pr-14 pl-6' : 'pl-14 pr-6'} text-white text-lg focus:outline-none focus:border-emerald-500/50 transition-colors shadow-lg`}
-                                        dir={language === 'ar' ? 'rtl' : 'ltr'}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* List */}
-                            <div className="flex-1 overflow-y-auto custom-scrollbar pb-10">
-                                {hookLoading ? (
-                                    <div className="h-64 flex items-center justify-center">
-                                        <Loader text="Loading Surahs..." />
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 px-2">
-                                        {filteredSurahs.map(surah => (
-                                            <div
-                                                key={surah.number}
-                                                onClick={() => handleSurahClick(surah)}
-                                                className="p-5 bg-white/5 hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 rounded-2xl cursor-pointer transition-all duration-300 group flex justify-between items-center shadow-md hover:shadow-xl hover:-translate-y-1"
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <span className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-full text-sm font-mono group-hover:bg-emerald-500 group-hover:text-black transition-colors font-bold border border-white/10">
-                                                        {surah.number}
-                                                    </span>
-                                                    <div className="text-left">
-                                                        <div className="text-sm text-white/40 uppercase tracking-widest">{surah.englishName}</div>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right font-serif text-2xl text-emerald-300" style={{ fontFamily: 'Amiri, serif' }}>
-                                                    {surah.name}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </motion.div>
-                    ) : (
-                        /* Surah Reader View */
-                        <motion.div
-                            key="reader"
-                            initial={{ opacity: 0, scale: 0.98 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.98 }}
-                            className="h-full overflow-y-auto custom-scrollbar p-4 md:p-12 pb-32"
-                        >
-                            {/* Toast Notification */}
-                            <AnimatePresence>
-                                {savedPopup && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 50 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: 50 }}
-                                        className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 z-50 pointer-events-none"
-                                    >
-                                        <Save size={18} />
-                                        <span className="font-bold">Saved Ayah {savedPopup}</span>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-
-                            {contentLoading ? (
-                                <div className="h-full flex items-center justify-center">
-                                    <Loader text="Loading Verses..." />
-                                </div>
-                            ) : surahContent ? (
-                                <div className="max-w-4xl mx-auto bg-white/5 rounded-3xl p-8 md:p-16 border border-white/10 shadow-2xl relative">
-                                    {/* Bismillah */}
-                                    <div className="text-center mb-12 border-b border-white/10 pb-8">
-                                        <h3 className="text-4xl md:text-5xl text-emerald-400 mb-4" style={{ fontFamily: 'Amiri, serif', lineHeight: '1.8' }}>
-                                            بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
-                                        </h3>
-                                    </div>
-
-                                    {/* Verses - Continuous Flow */}
-                                    <div className="text-center" dir="rtl">
-                                        <p className="font-light text-white/90 transition-all duration-300" style={{ fontFamily: 'Amiri, serif', fontSize: `${fontSize}px`, lineHeight: '1.8' }}>
-                                            {surahContent.arabic.ayahs.map((ayah) => (
-                                                <span
-                                                    key={ayah.number}
-                                                    id={`ayah-${ayah.numberInSurah}`}
-                                                    ref={el => verseRefs.current[ayah.numberInSurah] = el}
-                                                    className={`inline relative px-1 group/ayah rounded-lg hover:bg-emerald-500/10 transition-colors cursor-pointer ${progress.sura === selectedSurah.number && progress.ayah === ayah.numberInSurah ? 'bg-emerald-500/20' : ''}`}
-                                                    onClick={() => handleSaveProgress(ayah.numberInSurah)}
-                                                    title="Click to save progress"
-                                                >
-                                                    {ayah.text.replace('بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ', '')}
-                                                    <span className="inline-flex items-center justify-center w-10 h-10 mx-2 text-lg border border-emerald-500/40 rounded-full text-emerald-400 number-symbol align-middle relative">
-                                                        {ayah.numberInSurah}
-                                                        {progress.sura === selectedSurah.number && progress.ayah === ayah.numberInSurah && (
-                                                            <div className="absolute -top-2 -right-2 bg-amber-500 text-black p-1 rounded-full shadow-lg animate-bounce">
-                                                                <Bookmark size={10} fill="currentColor" />
-                                                            </div>
-                                                        )}
-                                                    </span>
-                                                </span>
-                                            ))}
-                                        </p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="text-center p-20 text-red-400">Error loading content</div>
-                            )}
-                        </motion.div>
+                            {t[STATUS_LABEL[st]]}
+                        </button>
+                    ))}
+                    {hideText && (
+                        <>
+                            <span className={`ms-auto whitespace-nowrap ${theme.muted}`}>{t.qTapToReveal}</span>
+                            <button onClick={() => setRevealed(new Set(selVerses.map(v => v.n)))} className="px-2.5 py-1 rounded-full border border-current/20 whitespace-nowrap">{t.qRevealAll}</button>
+                        </>
                     )}
-                </AnimatePresence>
+                </div>
+            )}
+
+            {/* Body */}
+            <div className="flex-1 overflow-hidden relative">
+                {!meta || !text ? (
+                    error ? (
+                        <div className="h-full flex flex-col items-center justify-center gap-3 p-6 text-center">
+                            <p>{t.qLoadError}</p>
+                            <button onClick={retry} className="px-4 py-2 rounded-full bg-emerald-500 text-white">{t.qRetry}</button>
+                        </div>
+                    ) : (
+                        <div className="h-full flex items-center justify-center"><Loader text={t.qLoadingQuran} /></div>
+                    )
+                ) : selection ? (
+                    <QuranReader
+                        meta={meta}
+                        text={text}
+                        translation={translation}
+                        selection={effective}
+                        onNavigate={(sel) => open(sel)}
+                        prefs={prefs}
+                        theme={theme}
+                        fontCss={fontCss}
+                        playingN={audio.current?.n}
+                        progress={progress?.timestamp > 0 ? progress : null}
+                        bookmarks={bookmarks}
+                        hideText={hideText}
+                        revealed={revealed}
+                        onReveal={(n) => setRevealed(r => new Set(r).add(n))}
+                        onVerseTap={setSheetVerse}
+                        focusN={focusN}
+                        t={t}
+                        language={language}
+                    />
+                ) : (
+                    <QuranIndex
+                        meta={meta}
+                        text={text}
+                        translationId={prefs.translation}
+                        tab={tab}
+                        setTab={setTab}
+                        query={query}
+                        setQuery={setQuery}
+                        onOpen={open}
+                        progress={progress}
+                        onContinue={openContinue}
+                        bookmarks={bookmarks}
+                        hifz={hifz}
+                        setHifz={setHifz}
+                        streak={streak}
+                        pagesToday={pagesToday}
+                        theme={theme}
+                        fontCss={fontCss}
+                        t={t}
+                        language={language}
+                    />
+                )}
+                {loading && meta && <div className="absolute top-2 end-3 text-xs opacity-60">…</div>}
             </div>
+
+            <AnimatePresence>
+                {toast && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 30 }}
+                        className="fixed bottom-28 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 z-[80] pointer-events-none"
+                    >
+                        <Check size={18} /><span className="font-semibold text-sm">{toast}</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {sheetVerse && (
+                    <VerseSheet
+                        key={sheetVerse.n}
+                        verse={sheetVerse}
+                        surah={sheetSurah}
+                        arabic={text[sheetVerse.n - 1]}
+                        translation={translation?.[sheetVerse.n - 1]}
+                        fontCss={fontCss}
+                        bookmarks={bookmarks}
+                        onPlayFromHere={() => {
+                            const start = selVerses.findIndex(v => v.n === sheetVerse.n);
+                            audio.playQueue(queueFrom(selVerses), Math.max(0, start), { loopQueue: false });
+                            setSheetVerse(null);
+                        }}
+                        onLoop={(endAyah) => {
+                            const range = meta.verses.filter(v => v.s === sheetVerse.s && v.a >= sheetVerse.a && v.a <= endAyah);
+                            audio.playQueue(queueFrom(range), 0, { loopQueue: true });
+                            setSheetVerse(null);
+                        }}
+                        onMarkRead={() => {
+                            saveProgress(sheetVerse.s, sheetVerse.a, { page: sheetVerse.page, hq: sheetVerse.hq });
+                            showToast(t.qSaved);
+                            setSheetVerse(null);
+                        }}
+                        onClose={() => setSheetVerse(null)}
+                        t={t}
+                        language={language}
+                    />
+                )}
+                {showSettings && (
+                    <ReaderSettings
+                        key="settings"
+                        onClose={() => setShowSettings(false)}
+                        prefs={prefs}
+                        update={updatePrefs}
+                        audio={audio}
+                        t={t}
+                        language={language}
+                    />
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 };
